@@ -1,0 +1,62 @@
+{
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": [
+		"config:recommended"
+	],
+	"timezone": "Europe/Athens",
+	"schedule": [
+		"before 9am on monday"
+	],
+	"automerge": false,
+	"dependencyDashboard": true,
+	"labels": [
+		"dependencies"
+	],
+	"lockFileMaintenance": {
+		"enabled": true,
+		"schedule": [
+			"before 9am on monday"
+		]
+	},
+	"packageRules": [
+		{
+			"matchManagers": [
+				"github-actions"
+			],
+			"groupName": "github actions",
+			"labels": [
+				"dependencies",
+				"github-actions"
+			]
+		},
+		{
+			"matchDepTypes": [
+				"devDependencies"
+			],
+			"groupName": "dev tooling",
+			"labels": [
+				"dependencies",
+				"tooling"
+			]
+		},
+		{
+			"matchPackageNames": [
+				"/^@?eslint/",
+				"/^@typescript-eslint/",
+				"/^vitest/",
+				"/^@vitest/",
+				"typescript",
+				"tsup",
+				"size-limit",
+				"publint",
+				"dependency-cruiser",
+				"@arethetypeswrong/cli"
+			],
+			"groupName": "lint test build tools",
+			"labels": [
+				"dependencies",
+				"tooling"
+			]
+		}
+	]
+}

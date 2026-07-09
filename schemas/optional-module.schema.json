@@ -1,0 +1,30 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"required": [
+		"id",
+		"label",
+		"description",
+		"files",
+		"scripts",
+		"devDependencies"
+	],
+	"properties": {
+		"id": {"type": "string"},
+		"label": {"type": "string"},
+		"description": {"type": "string"},
+		"files": {
+			"type": "array",
+			"items": {"type": "string"}
+		},
+		"scripts": {
+			"type": "array",
+			"items": {"type": "string"}
+		},
+		"devDependencies": {
+			"type": "array",
+			"items": {"type": "string"}
+		}
+	},
+	"additionalProperties": false
+}

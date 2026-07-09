@@ -1,0 +1,52 @@
+{
+  "name": "@ooopsstudio/stage-api",
+  "version": "0.1.0",
+  "description": "Typed TypeScript client for the Ooops Stage REST API v1.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "corepack pnpm build",
+    "pack:dry": "npm pack --dry-run",
+    "size": "size-limit --config .size-limit.json",
+    "publint": "publint",
+    "attw": "attw --pack --ignore-rules no-resolution --ignore-rules cjs-resolves-to-esm",
+    "depcruise": "depcruise --config ../../.dependency-cruiser.cjs src"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ooops-Studio/ooops-suite-stage-packages.git",
+    "directory": "packages/stage-api"
+  },
+  "homepage": "https://github.com/Ooops-Studio/ooops-suite-stage-packages/tree/main/packages/stage-api#readme",
+  "bugs": {
+    "url": "https://github.com/Ooops-Studio/ooops-suite-stage-packages/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
