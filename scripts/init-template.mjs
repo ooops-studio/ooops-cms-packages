@@ -41,7 +41,7 @@ const repoInfo = parseRepositoryUrl(rootManifest.repository?.url ?? '')
 const rootNameInfo = parseScopedName(rootManifest.name)
 const starterNameInfo = parseScopedName(starterManifest.name)
 const defaultScope = sanitizeScope(starterNameInfo.scope || rootNameInfo.scope || gitRepoInfo.owner || '')
-const defaultRepoOwner = preferTemplateSafeValue(gitRepoInfo.owner, repoInfo.owner, 'Ooops-Studio')
+const defaultRepoOwner = preferTemplateSafeValue(gitRepoInfo.owner, repoInfo.owner, 'ooops-studio')
 const defaultRepoName = preferTemplateSafeValue(gitRepoInfo.repo, path.basename(repoRoot), 'repo-name')
 const rl = shouldPrompt(args)
 	? createInterface({input: process.stdin, output: process.stdout})
@@ -474,13 +474,6 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version:
-          - 20.x
-          - 22.x
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -488,12 +481,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.20.0
+          version: 11.13.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: \${{ matrix.node-version }}
+          node-version: 22.14.0
           cache: pnpm
 
       - name: Install dependencies
@@ -541,14 +534,17 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.20.0
+          version: 11.13.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.14.0
           cache: pnpm
           registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install --global npm@^11.5.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -741,10 +737,10 @@ Checklist:
 	if (moduleOptions.enabled.has('migration-tools')) {
 		sections.push(`## For internal package splits
 
-This template can extract reusable packages from larger monorepos into focused package repos, for example \`ooops-suite\` to \`ooops-stage-packages\` or \`ooops-analytics-packages\`.
+This template can extract reusable packages from larger monorepos into focused package repos, for example \`ooops-suite\` to \`ooops-cms-packages\` or \`ooops-analytics-packages\`.
 
 \`\`\`sh
-pnpm -w copy:package -- --from ../ooops-suite/packages/stage-api
+pnpm -w copy:package -- --from ../ooops-suite/packages/cms-api
 pnpm -w create:package -- --name @your-scope/new-package --archetype public-package
 pnpm -w deprecate:package -- --package @your-scope/old-package
 \`\`\`

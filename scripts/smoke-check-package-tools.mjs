@@ -13,16 +13,16 @@ await run('node', [
 await run('node', [
 	'./scripts/copy-package-from-repo.mjs',
 	'--from',
-	'./packages/stage-api',
+	'./packages/cms-api',
 	'--name',
-	'@ooopsstudio/copied-stage-api',
+	'@ooopsstudio/copied-cms-api',
 	'--dry-run'
 ])
 
 await run('node', [
 	'./scripts/deprecate-package.mjs',
 	'--package',
-	'@ooopsstudio/stage-api'
+	'@ooopsstudio/cms-api'
 ])
 
 console.log('Package creation and migration tool smoke checks passed.')

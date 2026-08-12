@@ -1,12 +1,9 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Package releases are tracked through Changesets and package-specific changelog entries.
 
-The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
+## Unreleased
 
-## [Unreleased]
-### Added
-- Initial monorepo template with TypeScript, pnpm, Vitest, ESLint, and tsup
-- Demo package with example implementation
-- CI/CD pipeline with GitHub Actions
-- Comprehensive documentation and setup instructions
+- Extracted `cms-api`, `cms-astro` and `cms-cloudflare` from the Ooops CMS application.
+- Removed the former package names and repository references.
+- Upgraded the repository baseline to Node.js 22 and pnpm 11.

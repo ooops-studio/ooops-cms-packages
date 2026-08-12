@@ -3,7 +3,7 @@
 	"changelog": [
 		"@changesets/changelog-github",
 		{
-			"repo": "Ooops-Studio/ooops-suite-stage-packages"
+			"repo": "ooops-studio/ooops-cms-packages"
 		}
 	],
 	"commit": false,

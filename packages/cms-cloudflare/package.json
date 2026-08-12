@@ -1,0 +1,51 @@
+{
+  "name": "@ooopsstudio/cms-cloudflare",
+  "version": "0.1.0",
+  "description": "Cloudflare-friendly CMS webhook, preview, and deploy hook helpers.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "corepack pnpm build",
+    "pack:dry": "npm pack --dry-run",
+    "size": "size-limit --config .size-limit.json",
+    "publint": "publint",
+    "attw": "attw --pack --ignore-rules no-resolution --ignore-rules cjs-resolves-to-esm",
+    "depcruise": "depcruise --config ../../.dependency-cruiser.cjs src"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ooops-studio/ooops-cms-packages.git",
+    "directory": "packages/cms-cloudflare"
+  },
+  "homepage": "https://github.com/ooops-studio/ooops-cms-packages/tree/main/packages/cms-cloudflare#readme",
+  "bugs": {
+    "url": "https://github.com/ooops-studio/ooops-cms-packages/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}

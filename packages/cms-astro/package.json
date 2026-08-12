@@ -1,7 +1,7 @@
 {
-  "name": "@ooopsstudio/stage-api",
+  "name": "@ooopsstudio/cms-astro",
   "version": "0.1.0",
-  "description": "Typed TypeScript client for the Ooops Stage REST API v1.",
+  "description": "Astro-friendly helpers for Ooops CMS consumer sites.",
   "type": "module",
   "private": false,
   "license": "MIT",
@@ -16,7 +16,6 @@
   },
   "files": [
     "dist",
-    "examples",
     "README.md"
   ],
   "scripts": {
@@ -30,23 +29,26 @@
     "attw": "attw --pack --ignore-rules no-resolution --ignore-rules cjs-resolves-to-esm",
     "depcruise": "depcruise --config ../../.dependency-cruiser.cjs src"
   },
+  "dependencies": {
+    "@ooopsstudio/cms-api": "workspace:^"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ooops-Studio/ooops-suite-stage-packages.git",
-    "directory": "packages/stage-api"
+    "url": "git+https://github.com/ooops-studio/ooops-cms-packages.git",
+    "directory": "packages/cms-astro"
   },
-  "homepage": "https://github.com/Ooops-Studio/ooops-suite-stage-packages/tree/main/packages/stage-api#readme",
+  "homepage": "https://github.com/ooops-studio/ooops-cms-packages/tree/main/packages/cms-astro#readme",
   "bugs": {
-    "url": "https://github.com/Ooops-Studio/ooops-suite-stage-packages/issues"
+    "url": "https://github.com/ooops-studio/ooops-cms-packages/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.14.0"
   }
 }

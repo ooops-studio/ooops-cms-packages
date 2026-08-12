@@ -56,7 +56,7 @@ async function normalizeCopiedPackage(manifestPath, name) {
 	pkg.name = name
 	pkg.type ??= 'module'
 	pkg.license ??= rootPkg.license ?? 'MIT'
-	pkg.engines ??= {node: rootPkg.engines?.node ?? '>=20'}
+	pkg.engines ??= {node: rootPkg.engines?.node ?? '>=22.14.0'}
 
 	for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
 		const deps = pkg[field]

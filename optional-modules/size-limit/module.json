@@ -3,7 +3,7 @@
 	"label": "Size Limit",
 	"description": "Package-level size-limit scripts, configs, and dev dependencies.",
 	"files": [
-		"packages/stage-api/.size-limit.json",
+		"packages/cms-api/.size-limit.json",
 		"examples/package-archetypes/public-package/.size-limit.json",
 		"examples/package-archetypes/multi-entry-package/.size-limit.mjs",
 		"examples/package-archetypes/adapter-package/.size-limit.mjs"

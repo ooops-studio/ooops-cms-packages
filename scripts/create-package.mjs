@@ -43,7 +43,7 @@ console.log('- Run pnpm install and pnpm -w validate:ci.')
 async function rewritePackageManifest(manifestPath, name) {
 	const rootPkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
 	const pkg = JSON.parse(await readFile(manifestPath, 'utf8'))
-	const repositoryUrl = rootPkg.repository?.url ?? 'https://github.com/Ooops-Studio/repo-name.git'
+	const repositoryUrl = rootPkg.repository?.url ?? 'https://github.com/ooops-studio/repo-name.git'
 	const homepage = repositoryUrl.replace(/^git\+/u, '').replace(/\.git$/u, '')
 
 	pkg.name = name
@@ -51,7 +51,7 @@ async function rewritePackageManifest(manifestPath, name) {
 	pkg.type ??= 'module'
 	pkg.license ??= rootPkg.license ?? 'MIT'
 	pkg.description ??= `${name} package.`
-	pkg.engines ??= {node: rootPkg.engines?.node ?? '>=20'}
+	pkg.engines ??= {node: rootPkg.engines?.node ?? '>=22.14.0'}
 
 	if (pkg.private !== true) {
 		pkg.repository ??= {type: 'git', url: repositoryUrl}
