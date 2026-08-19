@@ -1,5 +1,11 @@
 # @ooopsstudio/cms-astro
 
+## 0.2.1
+
+### Patch Changes
+
+- [#6](https://github.com/ooops-studio/ooops-cms-packages/pull/6) [`eafa50f`](https://github.com/ooops-studio/ooops-cms-packages/commit/eafa50fc2ef25990f9abe1f46edd3449a09bfd1f) Thanks [@italiour](https://github.com/italiour)! - Replace the leaked workspace protocol with a registry-compatible CMS API dependency range so npm consumers can install the published adapters.
+
 ## 0.2.0
 
 ### Minor Changes
