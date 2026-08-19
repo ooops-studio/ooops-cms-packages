@@ -1,5 +1,11 @@
 # @ooopsstudio/cms-cloudflare
 
+## 0.3.1
+
+### Patch Changes
+
+- [#10](https://github.com/ooops-studio/ooops-cms-packages/pull/10) [`d4b1ad7`](https://github.com/ooops-studio/ooops-cms-packages/commit/d4b1ad70eff98eb857862927bfa81eb619820205) Thanks [@italiour](https://github.com/italiour)! - Keep completed CMS rebuild events idempotent for seven days while retaining a short recoverable processing lease, and document the full replay-store contract.
+
 ## 0.3.0
 
 ### Minor Changes
