@@ -31,6 +31,7 @@ for (const entry of packageDirs) {
 	assert(Array.isArray(pkg.files) && pkg.files.length > 0, `${relative(manifestPath)} must declare a non-empty "files" array`)
 	assert(pkg.files.includes('dist'), `${relative(manifestPath)} must include "dist" in "files"`)
 	assert(pkg.exports && Object.keys(pkg.exports).length > 0, `${relative(manifestPath)} must declare a non-empty "exports" map`)
+	assertPublishableDependencyRanges(pkg, manifestPath)
 
 	if (pkg.name.startsWith('@')) {
 		assert(
@@ -41,6 +42,17 @@ for (const entry of packageDirs) {
 }
 
 console.log('Validated package manifests for publishable and private workspace packages.')
+
+function assertPublishableDependencyRanges(pkg, manifestPath) {
+	for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+		for (const [name, range] of Object.entries(pkg[section] ?? {})) {
+			assert(
+				typeof range === 'string' && !/^(?:workspace|file|link):/u.test(range),
+				`${relative(manifestPath)} ${section}.${name} must use a publishable registry range`
+			)
+		}
+	}
+}
 
 function assertRepository(pkg, manifestPath) {
 	const repository = pkg.repository

@@ -137,8 +137,8 @@ importers:
   packages/cms-astro:
     dependencies:
       '@ooopsstudio/cms-api':
-        specifier: workspace:^
-        version: link:../cms-api
+        specifier: ^0.2.0
+        version: 0.2.0
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -150,8 +150,8 @@ importers:
   packages/cms-cloudflare:
     dependencies:
       '@ooopsstudio/cms-api':
-        specifier: workspace:^
-        version: link:../cms-api
+        specifier: ^0.2.0
+        version: 0.2.0
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -798,6 +798,10 @@ packages:
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
+
+  '@ooopsstudio/cms-api@0.2.0':
+    resolution: {integrity: sha512-oXUOrbhys2d5Sj6PBwUosVN1VIfILXDlFxjlMO7m1KRf6xT2aZliC+xRfrZ2hBjRel98pyikCnNPSyI+RVaZXA==}
+    engines: {node: '>=22.14.0'}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -3516,6 +3520,8 @@ snapshots:
       '@emnapi/runtime': 1.5.0
       '@tybys/wasm-util': 0.10.1
     optional: true
+
+  '@ooopsstudio/cms-api@0.2.0': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

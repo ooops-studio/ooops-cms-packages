@@ -30,7 +30,7 @@
     "depcruise": "depcruise --config ../../.dependency-cruiser.cjs src"
   },
   "dependencies": {
-    "@ooopsstudio/cms-api": "workspace:^"
+    "@ooopsstudio/cms-api": "^0.2.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
