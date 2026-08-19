@@ -569,12 +569,12 @@ jobs:
         if: \${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
-          commit: Version Packages
-          title: Version Packages
-          version: pnpm -w changeset version
-          publish: pnpm -w publish:packages
+          github-token: \${{ secrets.RELEASE_TOKEN != '' && secrets.RELEASE_TOKEN || github.token }}
+          commit-message: Version Packages
+          pr-title: Version Packages
+          version-script: pnpm -w changeset version
+          publish-script: pnpm -w publish:packages
         env:
-          GITHUB_TOKEN: \${{ secrets.RELEASE_TOKEN != '' && secrets.RELEASE_TOKEN || github.token }}
           GITHUB_PACKAGES_TOKEN: \${{ secrets.GITHUB_PACKAGES_TOKEN }}
           NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
 `
