@@ -1,210 +1,135 @@
 import {describe, expect, it, vi} from 'vitest'
 
 import {
-	createCmsPreviewRedirect,
-	handleCmsRebuildWebhook,
-	signCmsWebhookPayload,
-	triggerCloudflarePagesDeployHook,
-	verifyCmsPreviewCookie,
-	verifyCmsWebhookSignature,
-	verifyCmsWebhookRequest
+	clearCmsPreviewSessionCookie,
+	cmsPreviewPath,
+	cmsPreviewResponseHeaders,
+	createCmsPreviewClientFromRequest,
+	createCmsPreviewClientFromSession,
+	createCmsPreviewSession,
+	readCmsPreviewSession,
+	readCmsPreviewToken,
+	serializeCmsPreviewSessionCookie,
+	withCmsPreviewResponseHeaders
 } from './index'
 
-const secret = 'cms_secret'
-const timestamp = '2026-07-09T10:00:00.000Z'
-const now = timestamp
-const body = JSON.stringify({ok: true, id: 'entry-1'})
+const now = '2026-07-09T10:00:00.000Z'
+const secret = 'cms-preview-session-secret'
 
-describe('cms signatures', () => {
-	it('signs and verifies a valid payload', async() => {
-		const signature = await signCmsWebhookPayload({secret, timestamp, body})
-
-		expect(signature).toMatch(/^v1=[a-f0-9]{64}$/)
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp, body, signature, now})
-		).resolves.toEqual({ok: true, timestamp})
+describe('Ooops CMS preview request contract', () => {
+	it('reads the CMS-issued opaque token from the canonical preview parameter', () => {
+		const request = new Request('https://site.example/preview/content/singles/homepage?preview=preview_123')
+		expect(readCmsPreviewToken(request)).toBe('preview_123')
+		expect(readCmsPreviewToken(new Request('https://site.example/preview/content/singles/homepage'))).toBeNull()
 	})
 
-	it('accepts a raw hex signature', async() => {
-		const signature = (await signCmsWebhookPayload({secret, timestamp, body})).replace('v1=', '')
-
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp, body, signature, now})
-		).resolves.toEqual({ok: true, timestamp})
-	})
-
-	it('rejects invalid, stale, and tampered signatures', async() => {
-		const signature = await signCmsWebhookPayload({secret, timestamp, body})
-
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp, body, signature: 'v1=bad', now})
-		).resolves.toMatchObject({ok: false, code: 'invalid_signature_format'})
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp, body, signature, now: '2026-07-09T10:10:01.000Z'})
-		).resolves.toMatchObject({ok: false, code: 'stale_timestamp'})
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp, body: `${body} `, signature, now})
-		).resolves.toMatchObject({ok: false, code: 'invalid_signature'})
-	})
-
-	it('returns clear errors for missing headers', async() => {
-		await expect(
-			verifyCmsWebhookSignature({secret, timestamp: '', body, signature: '', now})
-		).resolves.toMatchObject({ok: false, code: 'missing_timestamp'})
-	})
-})
-
-describe('cms webhook requests', () => {
-	it('verifies a signed request and parses JSON', async() => {
-		const request = await signedWebhookRequest({event: 'cms.entry.published'})
-
-		await expect(
-			verifyCmsWebhookRequest(request, {secret, now})
-		).resolves.toMatchObject({
-			ok: true,
-			event: 'cms.entry.published',
-			timestamp,
-			body,
-			json: {ok: true, id: 'entry-1'}
+	it('creates a read-only CMS preview client with the server API token', async() => {
+		const fetchMock = vi.fn(async() => Response.json({ok: true, preview: true, data: {title: 'Draft'}}))
+		const request = new Request('https://site.example/preview/content/singles/homepage?preview=preview_123')
+		const result = createCmsPreviewClientFromRequest(request, {
+			baseUrl: 'https://cms.ooops.studio/api/cms/v1',
+			token: 'api_123',
+			fetch: fetchMock as typeof fetch
 		})
+
+		expect(result?.previewToken).toBe('preview_123')
+		await result?.client.content.getSingle('homepage')
+		const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit]
+		expect(url.pathname).toBe('/api/cms/v1/preview/content/singles/homepage')
+		expect(url.searchParams.get('preview')).toBe('preview_123')
+		expect(init.headers).toMatchObject({authorization: 'Bearer api_123'})
 	})
 
-	it('rejects invalid JSON after signature verification', async() => {
-		const invalidBody = '{'
-		const request = await signedWebhookRequest({body: invalidBody})
-
-		await expect(
-			verifyCmsWebhookRequest(request, {secret, now})
-		).resolves.toMatchObject({ok: false, status: 400, code: 'invalid_json'})
-	})
-
-	it('filters disallowed events as ignored', async() => {
-		const request = await signedWebhookRequest({event: 'cms.entry.draft.updated'})
-
-		await expect(
-			verifyCmsWebhookRequest(request, {secret, allowedEvents: ['cms.entry.published'], now})
-		).resolves.toMatchObject({ok: false, status: 202, code: 'ignored_event'})
+	it('builds the consumer paths emitted by the CMS', () => {
+		expect(cmsPreviewPath({kind: 'single', apiId: 'homepage'}))
+			.toBe('/preview/content/singles/homepage')
+		expect(cmsPreviewPath({kind: 'collection', apiId: 'blog posts', slug: 'hello world'}))
+			.toBe('/preview/content/collections/blog%20posts/hello%20world')
 	})
 })
 
-describe('cms preview redirects', () => {
-	it('creates a redirect with a signed preview cookie', async() => {
-		const response = await createCmsPreviewRedirect(
-			new Request('https://site.example/api/preview?token=preview_token&redirect=/el/about?draft=1'),
-			{previewToken: 'preview_token', previewSecret: secret, now}
-		)
+describe('encrypted preview sessions', () => {
+	it('round-trips a validated token through an encrypted HttpOnly cookie', async() => {
+		const session = createCmsPreviewSession({
+			apiId: 'posts',
+			kind: 'collection',
+			previewToken: 'preview_123',
+			slug: 'hello-world',
+			now
+		})
+		const cookie = await serializeCmsPreviewSessionCookie(session, {secret, secure: true})
 
-		expect(response.status).toBe(302)
-		expect(response.headers.get('location')).toBe('/el/about?draft=1')
-		const cookie = response.headers.get('set-cookie') ?? ''
-		expect(cookie).toContain('cms_preview=')
+		expect(cookie).toContain('Path=/preview/content/')
 		expect(cookie).toContain('HttpOnly')
-		const value = cookie.match(/cms_preview=([^;]+)/)?.[1] ?? ''
-		await expect(verifyCmsPreviewCookie({value, secret, now})).resolves.toMatchObject({
-			ok: true,
-			path: '/el/about?draft=1'
+		expect(cookie).toContain('SameSite=Lax')
+		expect(cookie).toContain('Secure')
+		expect(cookie).not.toContain('preview_123')
+
+		const request = new Request('https://site.example/preview/content/collections/posts/hello-world', {
+			headers: {cookie: cookie.split(';')[0] ?? ''}
 		})
+		await expect(readCmsPreviewSession(request, {secret, now})).resolves.toEqual(session)
 	})
 
-	it('rejects invalid tokens and external redirects', async() => {
-		await expect(
-			createCmsPreviewRedirect(
-				new Request('https://site.example/api/preview?token=wrong&redirect=/about'),
-				{previewToken: 'preview_token', previewSecret: secret, now}
-			).then((response) => response.status)
-		).resolves.toBe(401)
+	it('rejects tampered and expired sessions', async() => {
+		const session = createCmsPreviewSession({
+			apiId: 'homepage',
+			kind: 'single',
+			previewToken: 'preview_123',
+			now,
+			ttlSeconds: 1
+		})
+		const cookie = await serializeCmsPreviewSessionCookie(session, {
+			secret,
+			secure: true,
+			ttlSeconds: 1
+		})
+		const value = cookie.split(';')[0] ?? ''
 
-		await expect(
-			createCmsPreviewRedirect(
-				new Request('https://site.example/api/preview?token=preview_token&redirect=https://evil.example'),
-				{previewToken: 'preview_token', previewSecret: secret, now}
-			).then((response) => response.status)
-		).resolves.toBe(400)
+		await expect(readCmsPreviewSession(new Request('https://site.example', {
+			headers: {cookie: `${value}x`}
+		}), {secret, now})).resolves.toBeNull()
+		await expect(readCmsPreviewSession(new Request('https://site.example', {
+			headers: {cookie: value}
+		}), {secret, now: '2026-07-09T10:00:02.000Z'})).resolves.toBeNull()
 	})
 
-	it('can add a non-sensitive preview indicator to the redirect', async() => {
-		const response = await createCmsPreviewRedirect(
-			new Request('https://site.example/api/preview?token=preview_token&redirect=/about?draft=1'),
-			{previewToken: 'preview_token', previewSecret: secret, indicatorParam: 'cmsPreview', now}
-		)
+	it('recreates the preview client only from the decrypted session', async() => {
+		const fetchMock = vi.fn(async() => Response.json({ok: true, preview: true, item: {title: 'Draft'}}))
+		const session = createCmsPreviewSession({
+			apiId: 'posts',
+			kind: 'collection',
+			previewToken: 'preview_123',
+			slug: 'hello-world',
+			now
+		})
+		const client = createCmsPreviewClientFromSession(session, {
+			baseUrl: 'https://cms.ooops.studio/api/cms/v1',
+			token: 'api_123',
+			fetch: fetchMock as typeof fetch
+		})
 
-		expect(response.headers.get('location')).toBe('/about?draft=1&cmsPreview=1')
+		await client.content.getCollectionEntry(session.apiId, session.slug ?? '')
+		const calls = fetchMock.mock.calls as unknown as [URL, RequestInit][]
+		expect(calls[0]?.[0].searchParams.get('preview')).toBe('preview_123')
+	})
+
+	it('clears the exact preview cookie scope', () => {
+		expect(clearCmsPreviewSessionCookie({secure: true}))
+			.toBe('ooops_cms_preview=; Path=/preview/content/; HttpOnly; SameSite=Lax; Max-Age=0; Secure')
 	})
 })
 
-describe('cloudflare deploy hooks', () => {
-	it('posts to the deploy hook URL', async() => {
-		const fetchMock = vi.fn(async() => new Response('queued', {status: 200}))
+describe('preview response privacy', () => {
+	it('sets private cache, referrer, and robots protections', async() => {
+		const headers = cmsPreviewResponseHeaders({'content-type': 'text/html'})
+		expect(headers.get('cache-control')).toBe('private, no-store')
+		expect(headers.get('referrer-policy')).toBe('no-referrer')
+		expect(headers.get('x-robots-tag')).toBe('noindex, nofollow, noarchive')
 
-		await expect(
-			triggerCloudflarePagesDeployHook('https://api.cloudflare.com/deploy', fetchMock as typeof fetch)
-		).resolves.toEqual({ok: true, status: 200, text: 'queued'})
-
-		expect(fetchMock).toHaveBeenCalledWith('https://api.cloudflare.com/deploy', {method: 'POST'})
-	})
-
-	it('handles rebuild webhooks end to end', async() => {
-		const request = await signedWebhookRequest({event: 'cms.entry.published'})
-		const fetchMock = vi.fn(async() => new Response('queued', {status: 200}))
-
-		const response = await handleCmsRebuildWebhook(request, {
-			secret,
-			deployHookUrl: 'https://api.cloudflare.com/deploy',
-			fetch: fetchMock as typeof fetch,
-			allowedEvents: ['cms.entry.published'],
-			now
-		})
-
-		await expect(response.json()).resolves.toMatchObject({ok: true, event: 'cms.entry.published'})
-		expect(response.status).toBe(200)
-		expect(fetchMock).toHaveBeenCalledOnce()
-	})
-
-	it('does not deploy ignored events', async() => {
-		const request = await signedWebhookRequest({event: 'cms.entry.draft.updated'})
-		const fetchMock = vi.fn(async() => new Response('queued', {status: 200}))
-
-		const response = await handleCmsRebuildWebhook(request, {
-			secret,
-			deployHookUrl: 'https://api.cloudflare.com/deploy',
-			fetch: fetchMock as typeof fetch,
-			allowedEvents: ['cms.entry.published'],
-			now
-		})
-
-		await expect(response.json()).resolves.toMatchObject({ok: false, code: 'ignored_event'})
-		expect(response.status).toBe(202)
-		expect(fetchMock).not.toHaveBeenCalled()
-	})
-
-	it('returns 502 when the deploy hook fails', async() => {
-		const request = await signedWebhookRequest({event: 'cms.entry.published'})
-		const fetchMock = vi.fn(async() => new Response('nope', {status: 500}))
-
-		const response = await handleCmsRebuildWebhook(request, {
-			secret,
-			deployHookUrl: 'https://api.cloudflare.com/deploy',
-			fetch: fetchMock as typeof fetch,
-			now
-		})
-
-		await expect(response.json()).resolves.toMatchObject({ok: false, code: 'deploy_hook_failed'})
-		expect(response.status).toBe(502)
+		const response = withCmsPreviewResponseHeaders(new Response('draft', {status: 203}))
+		expect(response.status).toBe(203)
+		expect(await response.text()).toBe('draft')
+		expect(response.headers.get('cache-control')).toBe('private, no-store')
 	})
 })
-
-async function signedWebhookRequest(options: {event?: string; body?: string} = {}) {
-	const event = options.event ?? 'cms.entry.published'
-	const rawBody = options.body ?? body
-	const signature = await signCmsWebhookPayload({secret, timestamp, body: rawBody})
-	return new Request('https://site.example/api/cms/rebuild', {
-		method: 'POST',
-		headers: {
-			'content-type': 'application/json',
-			'x-cms-event': event,
-			'x-cms-signature': signature,
-			'x-cms-timestamp': timestamp
-		},
-		body: rawBody
-	})
-}

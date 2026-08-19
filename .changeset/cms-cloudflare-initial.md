@@ -2,4 +2,4 @@
 "@ooopsstudio/cms-cloudflare": minor
 ---
 
-Add Cloudflare-friendly CMS webhook, preview redirect, and deploy hook helpers.
+Add Cloudflare-friendly helpers for the deployed CMS preview contract, including server-side token validation, encrypted sessions, scoped cookies, and private response headers.

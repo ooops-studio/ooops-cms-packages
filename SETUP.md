@@ -6,7 +6,7 @@
 - Package access: public
 - Publishing: npm trusted publishing
 - Runtime: Node.js `>=22.14.0`
-- Package manager: pnpm `11.13.0`
+- Package manager: pnpm `11.22.0`
 
 ## Release checklist
 

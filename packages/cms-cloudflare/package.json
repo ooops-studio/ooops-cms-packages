@@ -1,7 +1,7 @@
 {
   "name": "@ooopsstudio/cms-cloudflare",
   "version": "0.1.0",
-  "description": "Cloudflare-friendly CMS webhook, preview, and deploy hook helpers.",
+  "description": "Cloudflare-friendly helpers for secure Ooops CMS draft previews.",
   "type": "module",
   "private": false,
   "license": "MIT",
@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "corepack pnpm --filter @ooopsstudio/cms-api build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "corepack pnpm build",
     "pack:dry": "npm pack --dry-run",
@@ -32,6 +32,9 @@
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@ooopsstudio/cms-api": "workspace:^"
   },
   "repository": {
     "type": "git",

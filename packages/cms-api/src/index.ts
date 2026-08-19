@@ -192,6 +192,11 @@ export class OoopsCmsClient {
 				)
 			}
 			return parsed as T
+		} catch(error) {
+			if (timeoutController?.signal.aborted && !(error instanceof OoopsCmsApiError)) {
+				throw new OoopsCmsApiError(408, 'request_timeout', 'CMS API request timed out.', null)
+			}
+			throw error
 		} finally {
 			if (timeout) clearTimeout(timeout)
 		}
