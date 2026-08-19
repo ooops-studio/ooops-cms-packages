@@ -175,6 +175,31 @@ describe('signed CMS rebuild requests', () => {
 		expect(verified.event).toEqual(rebuildEvent)
 		expect(verified.duplicate).toBe(false)
 		expect(claim).toHaveBeenCalledWith(rebuildEvent.id, new Date(now).getTime() + 10 * 60 * 1_000)
+		expect(verified.completionExpiresAt).toBe(new Date(now).getTime() + 7 * 24 * 60 * 60 * 1_000)
+	})
+
+	it('keeps the processing lease short while retaining completed idempotency state', async() => {
+		const claim = vi.fn(async() => 'claimed' as const)
+		const complete = vi.fn(async() => {})
+		const handler = createCmsRebuildHandler({
+			secret: rebuildSecret,
+			deployHookUrl: 'https://api.cloudflare.com/client/v4/workers/builds/deploy_hooks/11111111-2222-3333-4444-555555555555',
+			replayStore: {claim, complete, release: async() => {}},
+			fetch: vi.fn(async() => Response.json({
+				success: true,
+				result: {already_exists: false, build_uuid: 'build-1'}
+			})) as typeof fetch,
+			now,
+			processingLeaseSeconds: 60,
+			idempotencyTtlSeconds: 30 * 24 * 60 * 60
+		})
+
+		await expect(handler(await signedRebuildRequest())).resolves.toMatchObject({status: 202})
+		expect(claim).toHaveBeenCalledWith(rebuildEvent.id, new Date(now).getTime() + 60_000)
+		expect(complete).toHaveBeenCalledWith(
+			rebuildEvent.id,
+			new Date(now).getTime() + 30 * 24 * 60 * 60 * 1_000
+		)
 	})
 
 	it('rejects invalid and stale signatures before claiming the event', async() => {
