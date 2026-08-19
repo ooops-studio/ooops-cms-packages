@@ -1,327 +1,172 @@
-export type CmsCloudflareFetch = typeof fetch
+import {
+	createCmsPreviewClient,
+	type CmsApiFetch,
+	type OoopsCmsPreviewClient
+} from '@ooopsstudio/cms-api'
 
-export type SignCmsWebhookPayloadInput = {
-	secret: string;
-	timestamp: string;
-	body: string;
-}
+export type CmsPreviewKind = 'collection' | 'single'
 
-export type VerifyCmsWebhookSignatureInput = SignCmsWebhookPayloadInput & {
-	signature: string;
-	toleranceMs?: number;
-	now?: Date | number | string;
-}
-
-export type CmsWebhookSignatureVerificationResult =
-	| {ok: true; timestamp: string}
-	| CmsCloudflareErrorResult
-
-export type CmsCloudflareErrorResult = {
-	ok: false;
-	status: number;
-	code: string;
-	message: string;
-}
-
-export type VerifyCmsWebhookRequestOptions = {
-	secret: string;
-	allowedEvents?: readonly string[];
-	toleranceMs?: number;
-	now?: Date | number | string;
-}
-
-export type CmsWebhookVerificationResult<TJson = unknown> =
-	| {ok: true; event: string; timestamp: string; body: string; json: TJson}
-	| {ok: false; status: number; code: string; message: string}
-
-export type CreateCmsPreviewRedirectOptions = {
+export type CmsPreviewSession = {
+	apiId: string;
+	expiresAt: number;
+	kind: CmsPreviewKind;
 	previewToken: string;
-	previewSecret: string;
-	cookieName?: string;
-	cookieMaxAgeSeconds?: number;
-	defaultRedirectPath?: string;
-	tokenParam?: string;
-	redirectParam?: string;
-	indicatorParam?: string | false;
-	now?: Date | number | string;
+	slug?: string;
 }
 
-export type VerifyCmsPreviewCookieInput = {
-	value: string;
+export type CreateCmsPreviewSessionInput = Omit<CmsPreviewSession, 'expiresAt'> & {
+	now?: Date | number | string;
+	ttlSeconds?: number;
+}
+
+export type CmsPreviewCookieOptions = {
 	secret: string;
-	toleranceMs?: number;
+	secure: boolean;
+	cookieName?: string;
+	path?: string;
+	ttlSeconds?: number;
+}
+
+export type ReadCmsPreviewSessionOptions = Pick<CmsPreviewCookieOptions, 'secret' | 'cookieName'> & {
 	now?: Date | number | string;
 }
 
-export type CmsPreviewCookieVerificationResult =
-	| {ok: true; path: string; timestamp: string}
-	| {ok: false; status: number; code: string; message: string}
-
-export type TriggerCloudflarePagesDeployHookResult = {
-	ok: boolean;
-	status: number;
-	text: string;
+export type CmsPreviewClientOptions = {
+	baseUrl: string;
+	token: string;
+	fetch?: CmsApiFetch;
+	timeoutMs?: number;
 }
 
-export type HandleCmsRebuildWebhookOptions = VerifyCmsWebhookRequestOptions & {
-	deployHookUrl: string;
-	fetch?: CmsCloudflareFetch;
+export type CmsPreviewClientFromRequest = {
+	client: OoopsCmsPreviewClient;
+	previewToken: string;
 }
 
 export type JsonResponseInit = NonNullable<ConstructorParameters<typeof Response>[1]>
 
-const defaultToleranceMs = 5 * 60 * 1000
-const defaultPreviewCookieName = 'cms_preview'
-const defaultPreviewCookieMaxAgeSeconds = 60 * 60
+const defaultCookieName = 'ooops_cms_preview'
+const defaultCookiePath = '/preview/content/'
+const defaultTtlSeconds = 30 * 60
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
-export const signCmsWebhookPayload = async(input: SignCmsWebhookPayloadInput): Promise<string> => {
-	assertNonEmpty(input.secret, 'secret')
-	assertNonEmpty(input.timestamp, 'timestamp')
-	const hex = await hmacSha256Hex(input.secret, `${input.timestamp}.${input.body}`)
-	return `v1=${hex}`
+/** Read the opaque preview token issued by Ooops CMS from the canonical query parameter. */
+export const readCmsPreviewToken = (request: Request, parameter = 'preview') => {
+	const token = new URL(request.url).searchParams.get(parameter)?.trim()
+	return token || null
 }
 
-export const verifyCmsWebhookSignature = async(
-	input: VerifyCmsWebhookSignatureInput
-): Promise<CmsWebhookSignatureVerificationResult> => {
-	const validationError = validateSignatureInput(input)
-	if (validationError) return validationError
-
-	const normalizedSignature = normalizeCmsWebhookSignature(input.signature)
-	if (!normalizedSignature) {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_signature_format',
-			message: 'CMS signature must be a v1 hex digest.'
-		}
+/** Build the consumer route shape that Ooops CMS uses for draft preview redirects. */
+export const cmsPreviewPath = ({
+	apiId,
+	kind,
+	slug
+}: Pick<CmsPreviewSession, 'apiId' | 'kind' | 'slug'>) => {
+	assertNonEmpty(apiId, 'apiId')
+	if (kind === 'collection') {
+		assertNonEmpty(slug ?? '', 'slug')
+		return `/preview/content/collections/${encodeURIComponent(apiId)}/${encodeURIComponent(slug ?? '')}`
 	}
-
-	const expected = stripSignatureVersion(await signCmsWebhookPayload(input))
-	if (!timingSafeHexEqual(expected, normalizedSignature)) {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_signature',
-			message: 'CMS webhook signature is invalid.'
-		}
-	}
-
-	return {ok: true, timestamp: input.timestamp}
+	return `/preview/content/singles/${encodeURIComponent(apiId)}`
 }
 
-export const verifyCmsWebhookRequest = async<TJson = unknown>(
+/** Create the read-only CMS client used to validate a preview token server-side. */
+export const createCmsPreviewClientFromRequest = (
 	request: Request,
-	options: VerifyCmsWebhookRequestOptions
-): Promise<CmsWebhookVerificationResult<TJson>> => {
-	if (!options.secret) {
-		return {
-			ok: false,
-			status: 500,
-			code: 'missing_secret',
-			message: 'CMS webhook secret is not configured.'
-		}
+	options: CmsPreviewClientOptions & {previewParameter?: string}
+): CmsPreviewClientFromRequest | null => {
+	const previewToken = readCmsPreviewToken(request, options.previewParameter)
+	if (!previewToken) return null
+	return {
+		previewToken,
+		client: createCmsPreviewClient({...options, previewToken})
 	}
+}
 
-	const timestamp = request.headers.get('x-cms-timestamp') ?? ''
-	const signature = request.headers.get('x-cms-signature') ?? ''
-	const event = request.headers.get('x-cms-event') ?? ''
-	const body = await request.text()
+/** Recreate the read-only CMS client from a validated, encrypted preview session. */
+export const createCmsPreviewClientFromSession = (
+	session: CmsPreviewSession,
+	options: CmsPreviewClientOptions
+) => createCmsPreviewClient({...options, previewToken: session.previewToken})
 
-	if (!event) {
-		return {
-			ok: false,
-			status: 400,
-			code: 'missing_event',
-			message: 'CMS webhook event header is required.'
-		}
+export const createCmsPreviewSession = (
+	input: CreateCmsPreviewSessionInput
+): CmsPreviewSession => {
+	assertNonEmpty(input.apiId, 'apiId')
+	assertNonEmpty(input.previewToken, 'previewToken')
+	if (input.kind === 'collection') assertNonEmpty(input.slug ?? '', 'slug')
+	const ttlSeconds = normalizeTtl(input.ttlSeconds)
+	return {
+		apiId: input.apiId,
+		expiresAt: resolveNow(input.now) + ttlSeconds * 1_000,
+		kind: input.kind,
+		previewToken: input.previewToken,
+		...(input.slug ? {slug: input.slug} : {})
 	}
+}
 
-	if (options.allowedEvents && !options.allowedEvents.includes(event)) {
-		return {
-			ok: false,
-			status: 202,
-			code: 'ignored_event',
-			message: `CMS webhook event "${event}" is not handled by this endpoint.`
-		}
-	}
+/** Encrypt a preview session using AES-GCM before placing it in an HttpOnly cookie. */
+export const serializeCmsPreviewSessionCookie = async(
+	session: CmsPreviewSession,
+	options: CmsPreviewCookieOptions
+) => {
+	assertNonEmpty(options.secret, 'secret')
+	const cookieName = options.cookieName ?? defaultCookieName
+	const path = normalizeCookiePath(options.path)
+	const ttlSeconds = normalizeTtl(options.ttlSeconds)
+	const value = await encryptSession(session, options.secret)
+	return `${cookieName}=${value}; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${options.secure ? '; Secure' : ''}`
+}
 
-	const signatureInput: VerifyCmsWebhookSignatureInput = {
-		secret: options.secret,
-		timestamp,
-		body,
-		signature
-	}
-	if (options.toleranceMs !== undefined) signatureInput.toleranceMs = options.toleranceMs
-	if (options.now !== undefined) signatureInput.now = options.now
+/** Decrypt and validate an existing preview session. Invalid or expired cookies are ignored. */
+export const readCmsPreviewSession = async(
+	request: Request,
+	options: ReadCmsPreviewSessionOptions
+): Promise<CmsPreviewSession | null> => {
+	if (!options.secret) return null
+	const cookieName = options.cookieName ?? defaultCookieName
+	const value = parseCookies(request.headers.get('cookie'))[cookieName]
+	if (!value) return null
 
-	const signatureResult = await verifyCmsWebhookSignature(signatureInput)
-	if (!signatureResult.ok) return signatureResult
+	const [rawIv, rawCiphertext, ...rest] = value.split('.')
+	if (!rawIv || !rawCiphertext || rest.length > 0) return null
 
 	try {
-		return {
-			ok: true,
-			event,
-			timestamp,
-			body,
-			json: JSON.parse(body) as TJson
-		}
-	} catch {
-		return {
-			ok: false,
-			status: 400,
-			code: 'invalid_json',
-			message: 'CMS webhook body must be valid JSON.'
-		}
-	}
-}
-
-export const createCmsPreviewRedirect = async(
-	request: Request,
-	options: CreateCmsPreviewRedirectOptions
-): Promise<Response> => {
-	const url = new URL(request.url)
-	const tokenParam = options.tokenParam ?? 'token'
-	const redirectParam = options.redirectParam ?? 'redirect'
-	const token = url.searchParams.get(tokenParam)
-	if (!options.previewToken || token !== options.previewToken) {
-		return jsonResponse({ok: false, code: 'invalid_preview_token', message: 'Preview token is invalid.'}, {status: 401})
-	}
-
-	let redirectPath = sanitizeRedirectPath(
-		url.searchParams.get(redirectParam) ?? options.defaultRedirectPath ?? '/'
-	)
-	if (!redirectPath) {
-		return jsonResponse({ok: false, code: 'invalid_redirect', message: 'Preview redirect must be a relative path.'}, {status: 400})
-	}
-	if (options.indicatorParam) {
-		const markedRedirect = new URL(redirectPath, 'https://cms-preview.local')
-		markedRedirect.searchParams.set(options.indicatorParam, '1')
-		redirectPath = `${markedRedirect.pathname}${markedRedirect.search}${markedRedirect.hash}`
-	}
-
-	const cookieName = options.cookieName ?? defaultPreviewCookieName
-	const maxAge = options.cookieMaxAgeSeconds ?? defaultPreviewCookieMaxAgeSeconds
-	const cookieValue = await createPreviewCookieValue({
-		secret: options.previewSecret,
-		path: redirectPath,
-		timestamp: resolveTimestamp(options.now)
-	})
-
-	const response = new Response(null, {
-		status: 302,
-		headers: {
-			location: redirectPath
-		}
-	})
-	response.headers.append('set-cookie', serializeCookie(cookieName, cookieValue, maxAge))
-	return response
-}
-
-export const verifyCmsPreviewCookie = async(
-	input: VerifyCmsPreviewCookieInput
-): Promise<CmsPreviewCookieVerificationResult> => {
-	if (!input.secret) {
-		return {
-			ok: false,
-			status: 500,
-			code: 'missing_secret',
-			message: 'CMS preview secret is not configured.'
-		}
-	}
-
-	const [payload, signature] = input.value.split('.')
-	if (!payload || !signature) {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_preview_cookie',
-			message: 'CMS preview cookie is malformed.'
-		}
-	}
-
-	const expected = stripSignatureVersion(await signCmsWebhookPayload({
-		secret: input.secret,
-		timestamp: payload,
-		body: ''
-	}))
-	if (!timingSafeHexEqual(expected, signature)) {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_preview_cookie_signature',
-			message: 'CMS preview cookie signature is invalid.'
-		}
-	}
-
-	let parsed: {path?: unknown; timestamp?: unknown}
-	try {
-		parsed = JSON.parse(utf8Base64UrlDecode(payload)) as {path?: unknown; timestamp?: unknown}
-	} catch {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_preview_cookie_payload',
-			message: 'CMS preview cookie payload is invalid.'
-		}
-	}
-
-	if (typeof parsed.path !== 'string' || typeof parsed.timestamp !== 'string') {
-		return {
-			ok: false,
-			status: 401,
-			code: 'invalid_preview_cookie_payload',
-			message: 'CMS preview cookie payload is incomplete.'
-		}
-	}
-
-	const timestampError = validateTimestamp(parsed.timestamp, input.toleranceMs, input.now)
-	if (timestampError) return timestampError
-
-	return {ok: true, path: parsed.path, timestamp: parsed.timestamp}
-}
-
-export const triggerCloudflarePagesDeployHook = async(
-	url: string,
-	fetchImpl: CmsCloudflareFetch = fetch
-): Promise<TriggerCloudflarePagesDeployHookResult> => {
-	if (!url) {
-		return {ok: false, status: 500, text: 'Cloudflare Pages deploy hook URL is not configured.'}
-	}
-	const response = await fetchImpl(url, {method: 'POST'})
-	const text = await response.text()
-	return {ok: response.ok, status: response.status, text}
-}
-
-export const handleCmsRebuildWebhook = async(
-	request: Request,
-	options: HandleCmsRebuildWebhookOptions
-): Promise<Response> => {
-	const webhook = await verifyCmsWebhookRequest(request, options)
-	if (!webhook.ok) {
-		return jsonResponse(
-			{ok: false, code: webhook.code, message: webhook.message},
-			{status: webhook.status}
+		const decrypted = await crypto.subtle.decrypt(
+			{name: 'AES-GCM', iv: fromBase64Url(rawIv)},
+			await getCookieKey(options.secret),
+			fromBase64Url(rawCiphertext)
 		)
+		return asSession(JSON.parse(decoder.decode(decrypted)), resolveNow(options.now))
+	} catch {
+		return null
 	}
-
-	const deploy = await triggerCloudflarePagesDeployHook(options.deployHookUrl, options.fetch)
-	if (!deploy.ok) {
-		return jsonResponse(
-			{
-				ok: false,
-				code: 'deploy_hook_failed',
-				status: deploy.status,
-				message: deploy.text || 'Cloudflare deploy hook failed.'
-			},
-			{status: 502}
-		)
-	}
-
-	return jsonResponse({ok: true, event: webhook.event, deployStatus: deploy.status})
 }
+
+export const clearCmsPreviewSessionCookie = (
+	options: Pick<CmsPreviewCookieOptions, 'secure' | 'cookieName' | 'path'>
+) => {
+	const cookieName = options.cookieName ?? defaultCookieName
+	const path = normalizeCookiePath(options.path)
+	return `${cookieName}=; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=0${options.secure ? '; Secure' : ''}`
+}
+
+/** Apply the cache and indexing protections required for private draft previews. */
+export const cmsPreviewResponseHeaders = (initial?: ConstructorParameters<typeof Headers>[0]) => {
+	const headers = new Headers(initial)
+	headers.set('cache-control', 'private, no-store')
+	headers.set('referrer-policy', 'no-referrer')
+	headers.set('x-robots-tag', 'noindex, nofollow, noarchive')
+	return headers
+}
+
+export const withCmsPreviewResponseHeaders = (response: Response) =>
+	new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: cmsPreviewResponseHeaders(response.headers)
+	})
 
 export const jsonResponse = (body: unknown, init: JsonResponseInit = {}) => {
 	const headers = new Headers(init.headers)
@@ -329,137 +174,93 @@ export const jsonResponse = (body: unknown, init: JsonResponseInit = {}) => {
 	return new Response(JSON.stringify(body), {...init, headers})
 }
 
-const createPreviewCookieValue = async(
-	input: {secret: string; path: string; timestamp: string}
-) => {
-	assertNonEmpty(input.secret, 'secret')
-	const payload = utf8Base64UrlEncode(
-		JSON.stringify({path: input.path, timestamp: input.timestamp})
+const encryptSession = async(session: CmsPreviewSession, secret: string) => {
+	const iv = crypto.getRandomValues(new Uint8Array(12))
+	const encrypted = await crypto.subtle.encrypt(
+		{name: 'AES-GCM', iv},
+		await getCookieKey(secret),
+		encoder.encode(JSON.stringify(session))
 	)
-	const signature = stripSignatureVersion(await signCmsWebhookPayload({
-		secret: input.secret,
-		timestamp: payload,
-		body: ''
-	}))
-	return `${payload}.${signature}`
+	return `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(encrypted))}`
 }
 
-const validateSignatureInput = (
-	input: VerifyCmsWebhookSignatureInput
-): CmsWebhookSignatureVerificationResult | null => {
-	if (!input.secret) {
-		return {ok: false, status: 500, code: 'missing_secret', message: 'CMS webhook secret is not configured.'}
-	}
-	if (!input.timestamp) {
-		return {ok: false, status: 400, code: 'missing_timestamp', message: 'CMS webhook timestamp is required.'}
-	}
-	if (!input.signature) {
-		return {ok: false, status: 401, code: 'missing_signature', message: 'CMS webhook signature is required.'}
-	}
-	return validateTimestamp(input.timestamp, input.toleranceMs, input.now)
-}
-
-const validateTimestamp = (
-	timestamp: string,
-	toleranceMs = defaultToleranceMs,
-	nowInput?: Date | number | string
-): CmsCloudflareErrorResult | null => {
-	const timestampMs = Date.parse(timestamp)
-	if (!Number.isFinite(timestampMs)) {
-		return {ok: false, status: 400, code: 'invalid_timestamp', message: 'CMS timestamp must be a valid date.'}
-	}
-	const nowMs = nowInput === undefined ? Date.now() : new Date(nowInput).getTime()
-	if (Math.abs(nowMs - timestampMs) > toleranceMs) {
-		return {ok: false, status: 401, code: 'stale_timestamp', message: 'CMS timestamp is outside the allowed tolerance.'}
-	}
-	return null
-}
-
-const hmacSha256Hex = async(secret: string, value: string) => {
-	const key = await crypto.subtle.importKey(
+const getCookieKey = async(secret: string) => {
+	const material = await crypto.subtle.importKey(
 		'raw',
 		encoder.encode(secret),
-		{name: 'HMAC', hash: 'SHA-256'},
+		{name: 'PBKDF2'},
 		false,
-		['sign']
+		['deriveKey']
 	)
-	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value))
-	return bytesToHex(new Uint8Array(signature))
+	return crypto.subtle.deriveKey(
+		{name: 'PBKDF2', hash: 'SHA-256', iterations: 100_000, salt: encoder.encode('ooops-cms-preview-v1')},
+		material,
+		{name: 'AES-GCM', length: 256},
+		false,
+		['encrypt', 'decrypt']
+	)
 }
 
-const normalizeCmsWebhookSignature = (signature: string) => {
-	const value = stripSignatureVersion(signature.trim())
-	return /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : null
-}
-
-const stripSignatureVersion = (signature: string) =>
-	signature.startsWith('v1=') ? signature.slice(3) : signature
-
-const timingSafeHexEqual = (left: string, right: string) => {
-	const leftBytes = hexToBytes(left)
-	const rightBytes = hexToBytes(right)
-	let diff = leftBytes.length ^ rightBytes.length
-	const length = Math.max(leftBytes.length, rightBytes.length)
-	for (let index = 0; index < length; index += 1) {
-		diff |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0)
-	}
-	return diff === 0
-}
-
-const bytesToHex = (bytes: Uint8Array) =>
-	Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-
-const hexToBytes = (hex: string) => {
-	const bytes = new Uint8Array(Math.ceil(hex.length / 2))
-	for (let index = 0; index < bytes.length; index += 1) {
-		bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
-	}
-	return bytes
-}
-
-const sanitizeRedirectPath = (value: string) => {
-	if (!value.startsWith('/') || value.startsWith('//')) return null
-	try {
-		const parsed = new URL(value, 'https://cms-preview.local')
-		return `${parsed.pathname}${parsed.search}${parsed.hash}`
-	} catch {
-		return null
+const asSession = (value: unknown, now: number): CmsPreviewSession | null => {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+	const input = value as Record<string, unknown>
+	if (input.kind !== 'collection' && input.kind !== 'single') return null
+	if (typeof input.apiId !== 'string' || !input.apiId) return null
+	if (typeof input.previewToken !== 'string' || !input.previewToken) return null
+	if (typeof input.expiresAt !== 'number' || input.expiresAt <= now) return null
+	if (input.slug !== undefined && typeof input.slug !== 'string') return null
+	if (input.kind === 'collection' && !input.slug) return null
+	return {
+		apiId: input.apiId,
+		expiresAt: input.expiresAt,
+		kind: input.kind,
+		previewToken: input.previewToken,
+		...(typeof input.slug === 'string' ? {slug: input.slug} : {})
 	}
 }
 
-const serializeCookie = (name: string, value: string, maxAgeSeconds: number) =>
-	`${name}=${value}; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}; Path=/; HttpOnly; Secure; SameSite=Lax`
+const parseCookies = (header: string | null) =>
+	Object.fromEntries(
+		(header ?? '')
+			.split(';')
+			.map((part) => part.trim())
+			.filter(Boolean)
+			.map((part) => {
+				const separator = part.indexOf('=')
+				return separator === -1
+					? [part, '']
+					: [part.slice(0, separator), part.slice(separator + 1)]
+			})
+	)
 
-const resolveTimestamp = (input?: Date | number | string) =>
-	input === undefined ? new Date().toISOString() : new Date(input).toISOString()
+const normalizeCookiePath = (value = defaultCookiePath) => {
+	if (!value.startsWith('/') || value.includes(';') || /[\r\n]/.test(value)) {
+		throw new Error('path must be a safe absolute cookie path.')
+	}
+	return value
+}
 
-const utf8Base64UrlEncode = (value: string) =>
-	base64ToBase64Url(bytesToBase64(encoder.encode(value)))
+const normalizeTtl = (value = defaultTtlSeconds) => {
+	if (!Number.isFinite(value) || value <= 0) throw new Error('ttlSeconds must be greater than zero.')
+	return Math.floor(value)
+}
 
-const utf8Base64UrlDecode = (value: string) =>
-	decoder.decode(base64ToBytes(base64UrlToBase64(value)))
+const resolveNow = (input?: Date | number | string) => {
+	const value = input === undefined ? Date.now() : new Date(input).getTime()
+	if (!Number.isFinite(value)) throw new Error('now must be a valid date.')
+	return value
+}
 
-const bytesToBase64 = (bytes: Uint8Array) => {
+const toBase64Url = (value: Uint8Array) => {
 	let binary = ''
-	for (const byte of bytes) binary += String.fromCharCode(byte)
-	return btoa(binary)
+	for (const byte of value) binary += String.fromCharCode(byte)
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
-const base64ToBytes = (value: string) => {
-	const binary = atob(value)
-	const bytes = new Uint8Array(binary.length)
-	for (let index = 0; index < binary.length; index += 1) {
-		bytes[index] = binary.charCodeAt(index)
-	}
-	return bytes
-}
-
-const base64ToBase64Url = (value: string) =>
-	value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-
-const base64UrlToBase64 = (value: string) => {
-	const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), '=')
-	return padded.replace(/-/g, '+').replace(/_/g, '/')
+const fromBase64Url = (value: string) => {
+	const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+	const binary = atob(normalized + '='.repeat((4 - (normalized.length % 4)) % 4))
+	return Uint8Array.from(binary, (character) => character.charCodeAt(0))
 }
 
 const assertNonEmpty = (value: string, field: string) => {

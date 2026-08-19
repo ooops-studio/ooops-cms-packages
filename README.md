@@ -6,14 +6,14 @@ Public, ESM-only integration packages for consuming Ooops CMS from applications 
 
 - `@ooopsstudio/cms-api`: typed read, preview, forms and media clients.
 - `@ooopsstudio/cms-astro`: Astro-oriented content, locale, SEO and sitemap helpers.
-- `@ooopsstudio/cms-cloudflare`: Cloudflare preview, webhook verification and rebuild helpers.
+- `@ooopsstudio/cms-cloudflare`: secure Cloudflare preview-session and response helpers.
 
 The packages are deliberately separate from the CMS application. They expose stable consumer contracts without importing application internals or owning CMS data.
 
 ## Requirements
 
 - Node.js `>=22.14.0`
-- pnpm `11.13.0`
+- pnpm `11.22.0`
 
 ## Development
 
@@ -28,7 +28,10 @@ Use package-scoped commands while iterating:
 pnpm --filter @ooopsstudio/cms-api test
 pnpm --filter @ooopsstudio/cms-astro test
 pnpm --filter @ooopsstudio/cms-cloudflare test
+pnpm check:cms-compatibility
 ```
+
+`check:cms-compatibility` semantically compares the committed package contract with the public OpenAPI document served by `cms.ooops.studio`. Pass a local file or another OpenAPI URL as its optional argument when validating a different CMS deployment.
 
 The strict validation pipeline runs manifest and license guards, lint, type checks, builds, tests, size limits, dependency boundaries, packed-consumer checks, Publint, ATTW and release readiness.
 
@@ -36,7 +39,7 @@ The strict validation pipeline runs manifest and license guards, lint, type chec
 
 - `cms-api` owns transport-neutral CMS client behavior.
 - `cms-astro` may depend on `cms-api`, but it must not duplicate client or authentication behavior.
-- `cms-cloudflare` owns Cloudflare-specific preview and webhook adapters.
+- `cms-cloudflare` owns Cloudflare-specific preview handoff, encrypted sessions and private response protections.
 - Browser code must never receive private CMS tokens.
 - CMS application source remains in the separate `ooops-cms` repository.
 

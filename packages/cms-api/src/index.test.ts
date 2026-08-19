@@ -55,6 +55,28 @@ describe('OoopsCmsClient', () => {
 			message: 'CMS API returned invalid JSON.'
 		})
 	})
+
+	it('wraps authenticated client timeouts in typed API errors', async() => {
+		const fetchMock = vi.fn(
+			(_url: URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener('abort', () => {
+					reject(new DOMException('Aborted', 'AbortError'))
+				})
+			})
+		)
+		const client = new OoopsCmsClient({
+			baseUrl: 'https://cms.example.com/api/cms/v1',
+			token: 'token_123',
+			fetch: fetchMock as typeof fetch,
+			timeoutMs: 1
+		})
+
+		await expect(client.seo.get()).rejects.toMatchObject({
+			name: 'OoopsCmsApiError',
+			status: 408,
+			code: 'request_timeout'
+		})
+	})
 })
 
 describe('public consumer clients', () => {
