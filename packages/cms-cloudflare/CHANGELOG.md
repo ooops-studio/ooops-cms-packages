@@ -1,5 +1,11 @@
 # @ooopsstudio/cms-cloudflare
 
+## 0.3.0
+
+### Minor Changes
+
+- [#8](https://github.com/ooops-studio/ooops-cms-packages/pull/8) [`52524af`](https://github.com/ooops-studio/ooops-cms-packages/commit/52524af9a7c81378427d68735d77f52f0be90474) Thanks [@italiour](https://github.com/italiour)! - Add the signed Ooops CMS rebuild event contract, durable replay claims, standardized handler responses, and a restricted Cloudflare Workers Deploy Hook client for SSG rebuilds.
+
 ## 0.2.1
 
 ### Patch Changes
