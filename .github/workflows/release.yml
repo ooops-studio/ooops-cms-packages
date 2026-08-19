@@ -75,4 +75,3 @@ jobs:
           publish-script: pnpm -w publish:packages
         env:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
