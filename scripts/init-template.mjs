@@ -544,7 +544,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Upgrade npm for trusted publishing
-        run: npm install --global npm@12.0.2
+        run: npm install --global npm@11.19.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
