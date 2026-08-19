@@ -103,14 +103,20 @@ const handler = createCmsRebuildHandler({
 	replayStore: {
 		claim: (eventId, expiresAt) => env.CMS_REBUILD_REPLAY_GUARD
 			.getByName('cms-rebuilds')
-			.claim(eventId, expiresAt)
+			.claim(eventId, expiresAt),
+		complete: (eventId, expiresAt) => env.CMS_REBUILD_REPLAY_GUARD
+			.getByName('cms-rebuilds')
+			.complete(eventId, expiresAt),
+		release: (eventId) => env.CMS_REBUILD_REPLAY_GUARD
+			.getByName('cms-rebuilds')
+			.release(eventId)
 	}
 })
 
 return handler(request)
 ```
 
-The replay store must provide an atomic `claim()` operation. A Durable Object is the recommended Cloudflare implementation; a KV read followed by a write is not an atomic replay defence.
+The replay store must provide atomic `claim()`, durable `complete()`, and retry-safe `release()` operations. A Durable Object is the recommended Cloudflare implementation; a KV read followed by a write is not an atomic replay defence. In-progress claims default to a short ten-minute lease, while completed event ids remain idempotent for seven days. Use `processingLeaseSeconds` and `idempotencyTtlSeconds` only when the site needs different windows.
 
 The CMS signs the exact `${timestamp}.${eventId}.${body}` byte sequence with HMAC-SHA256. Use `serializeCmsRebuildEvent()` and `createCmsRebuildSignatureHeaders()` in the CMS delivery worker rather than implementing another signature format.
 

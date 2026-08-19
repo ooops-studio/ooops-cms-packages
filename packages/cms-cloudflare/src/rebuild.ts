@@ -49,10 +49,15 @@ export type VerifyCmsRebuildRequestOptions = {
 	replayStore: CmsRebuildReplayStore;
 	now?: Date | number | string;
 	toleranceSeconds?: number;
+	/** Interrupted-claim lease. Defaults to twice the signature tolerance. */
+	processingLeaseSeconds?: number;
+	/** How long a successfully completed event remains idempotent. Defaults to seven days. */
+	idempotencyTtlSeconds?: number;
 }
 
 export type VerifiedCmsRebuildRequest = {
 	claimExpiresAt: number;
+	completionExpiresAt: number;
 	claimState: CmsRebuildClaimState;
 	duplicate: boolean;
 	event: CmsRebuildEvent;
@@ -172,12 +177,28 @@ export const verifyCmsRebuildRequest = async(
 		throw new CmsCloudflareError(401, 'event_id_mismatch', 'CMS rebuild event id does not match its signature.')
 	}
 
-	const claimExpiresAt = now + toleranceSeconds * 2 * 1_000
+	const processingLeaseSeconds = normalizePositiveInteger(
+		options.processingLeaseSeconds ?? toleranceSeconds * 2,
+		'processingLeaseSeconds'
+	)
+	const idempotencyTtlSeconds = normalizePositiveInteger(
+		options.idempotencyTtlSeconds ?? 7 * 24 * 60 * 60,
+		'idempotencyTtlSeconds'
+	)
+	const claimExpiresAt = now + processingLeaseSeconds * 1_000
+	const completionExpiresAt = now + idempotencyTtlSeconds * 1_000
 	const claimState = await options.replayStore.claim(event.id, claimExpiresAt)
 	if (!['claimed', 'completed', 'in_progress'].includes(claimState)) {
 		throw new CmsCloudflareError(500, 'replay_store_invalid', 'Replay store returned an invalid claim state.', true)
 	}
-	return {claimExpiresAt, claimState, duplicate: claimState === 'completed', event, rawBody}
+	return {
+		claimExpiresAt,
+		completionExpiresAt,
+		claimState,
+		duplicate: claimState === 'completed',
+		event,
+		rawBody
+	}
 }
 
 export const triggerCloudflareDeployHook = async(
@@ -231,7 +252,7 @@ export const triggerCloudflareDeployHook = async(
 
 export const createCmsRebuildHandler = (options: CreateCmsRebuildHandlerOptions) =>
 	async(request: Request) => {
-		let claimedEvent: {id: string; expiresAt: number} | null = null
+		let claimedEvent: {id: string; completionExpiresAt: number} | null = null
 		try {
 			const verified = await verifyCmsRebuildRequest(request, options)
 			if (verified.duplicate) {
@@ -245,9 +266,12 @@ export const createCmsRebuildHandler = (options: CreateCmsRebuildHandlerOptions)
 					retryable: true
 				}, 409, {'retry-after': '2'})
 			}
-			claimedEvent = {id: verified.event.id, expiresAt: verified.claimExpiresAt}
+			claimedEvent = {
+				id: verified.event.id,
+				completionExpiresAt: verified.completionExpiresAt
+			}
 			const build = await triggerCloudflareDeployHook(options)
-			await options.replayStore.complete(claimedEvent.id, claimedEvent.expiresAt)
+			await options.replayStore.complete(claimedEvent.id, claimedEvent.completionExpiresAt)
 			claimedEvent = null
 			return rebuildJsonResponse({
 				ok: true,
