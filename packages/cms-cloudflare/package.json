@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "corepack pnpm --filter @ooopsstudio/cms-api build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "corepack pnpm build",
     "pack:dry": "npm pack --dry-run",
