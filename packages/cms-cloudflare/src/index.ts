@@ -4,6 +4,8 @@ import {
 	type OoopsCmsPreviewClient
 } from '@ooopsstudio/cms-api'
 
+export * from './rebuild.js'
+
 export type CmsPreviewKind = 'collection' | 'single'
 
 export type CmsPreviewSession = {

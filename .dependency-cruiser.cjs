@@ -9,8 +9,18 @@
  * - Keep tests and test helpers out of runtime code
  */
 
+const {readdirSync} = require('node:fs')
 const path = require('node:path')
 const repoRoot = __dirname
+const packageNames = readdirSync(path.join(repoRoot, 'packages'), {withFileTypes: true})
+	.filter((entry) => entry.isDirectory())
+	.map((entry) => entry.name)
+const crossPackageInternalRules = packageNames.map((packageName) => ({
+	name: `no-cross-internals-${packageName}`,
+	severity: 'error',
+	from: {path: `^packages/${packageName}/src/`},
+	to: {path: `^packages/(?!${packageName}/)[^/]+/src/`}
+}))
 module.exports = {
 	forbidden: [
 		{name: 'no-cycles',     severity: 'error', from: {}, to: {circular: true}},
@@ -22,11 +32,9 @@ module.exports = {
 			to:   {path: '^packages/.*/(test|__tests__|testing)/'}
 		},
 
-		// Don’t import another package’s internals (only published exports)
-		{name: 'no-cross-internals', severity: 'error',
-			from: {path: '^packages/.*/src/'},
-			to:   {path: '^packages/.*/src/'}
-		},
+		// Don’t import another package’s internals (only published exports).
+		// Internal modules within the same package remain allowed.
+		...crossPackageInternalRules,
 
 		// Production code must not depend on devDeps
 		{name: 'no-dev-deps-in-src', severity: 'error',

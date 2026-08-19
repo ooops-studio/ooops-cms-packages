@@ -1,7 +1,7 @@
 {
   "name": "@ooopsstudio/cms-cloudflare",
   "version": "0.2.1",
-  "description": "Cloudflare-friendly helpers for secure Ooops CMS draft previews.",
+  "description": "Cloudflare helpers for secure Ooops CMS previews and signed static-site rebuilds.",
   "type": "module",
   "private": false,
   "license": "MIT",
