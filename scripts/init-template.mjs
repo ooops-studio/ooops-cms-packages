@@ -575,8 +575,7 @@ jobs:
           version-script: pnpm -w changeset version
           publish-script: pnpm -w publish:packages
         env:
-          GITHUB_PACKAGES_TOKEN: \${{ secrets.GITHUB_PACKAGES_TOKEN }}
-          NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
+          GITHUB_PACKAGES_TOKEN: \${{ secrets.GITHUB_PACKAGES_TOKEN }}${moduleOptions.publishingMode === 'npm-token' ? '\n          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}' : ''}
 `
 }
 
