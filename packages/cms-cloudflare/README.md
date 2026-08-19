@@ -1,10 +1,10 @@
 # @ooopsstudio/cms-cloudflare
 
-Cloudflare-friendly helpers for the secure draft-preview contract implemented by Ooops CMS.
+Cloudflare-friendly helpers for secure Ooops CMS draft previews and signed, replay-safe static-site rebuilds.
 
 The CMS redirects an editor to a consumer route with a short-lived opaque `preview` token. The consumer validates that token server-side with `@ooopsstudio/cms-api`, removes it from the browser URL, and stores it in an encrypted, scoped, `HttpOnly` session cookie. Draft responses must remain private and unindexable.
 
-This package is framework-agnostic and ships no routes, UI, content-model assumptions, or unsupported CMS webhook protocol.
+This package is framework-agnostic and ships no framework routes or UI. Its rebuild contract is the contract emitted by Ooops CMS deployment deliveries.
 
 ## Install
 
@@ -90,6 +90,32 @@ The helper sets:
 - `Referrer-Policy: no-referrer`
 - `X-Robots-Tag: noindex, nofollow, noarchive`
 
+## Rebuild an Astro SSG site after CMS publish
+
+Ooops CMS sends a signed event to a route owned by the deployed site. The route verifies the signature and timestamp, atomically claims the event id in durable storage, and then triggers the site's Cloudflare Workers Builds Deploy Hook. The Deploy Hook URL remains a Cloudflare secret and is never sent to or stored by the CMS.
+
+```ts
+import {createCmsRebuildHandler} from '@ooopsstudio/cms-cloudflare'
+
+const handler = createCmsRebuildHandler({
+	secret: env.OOOPS_CMS_REBUILD_SECRET,
+	deployHookUrl: env.OOOPS_CLOUDFLARE_DEPLOY_HOOK_URL,
+	replayStore: {
+		claim: (eventId, expiresAt) => env.CMS_REBUILD_REPLAY_GUARD
+			.getByName('cms-rebuilds')
+			.claim(eventId, expiresAt)
+	}
+})
+
+return handler(request)
+```
+
+The replay store must provide an atomic `claim()` operation. A Durable Object is the recommended Cloudflare implementation; a KV read followed by a write is not an atomic replay defence.
+
+The CMS signs the exact `${timestamp}.${eventId}.${body}` byte sequence with HMAC-SHA256. Use `serializeCmsRebuildEvent()` and `createCmsRebuildSignatureHeaders()` in the CMS delivery worker rather than implementing another signature format.
+
+`triggerCloudflareDeployHook()` accepts only the documented `https://api.cloudflare.com/client/v4/workers/builds/deploy_hooks/{id}` endpoint. Redirects and arbitrary hosts are rejected so a misconfigured secret cannot become an SSRF target.
+
 ## Public API
 
 - `readCmsPreviewToken(request, parameter?)`
@@ -103,6 +129,12 @@ The helper sets:
 - `cmsPreviewResponseHeaders(initial?)`
 - `withCmsPreviewResponseHeaders(response)`
 - `jsonResponse(body, init?)`
+- `serializeCmsRebuildEvent(event)`
+- `createCmsRebuildSignatureHeaders(body, options)`
+- `verifyCmsRebuildRequest(request, options)`
+- `triggerCloudflareDeployHook(options)`
+- `createCmsRebuildHandler(options)`
+- `CmsCloudflareError`
 
 ## Security properties
 
@@ -111,5 +143,6 @@ The helper sets:
 - Preview cookies default to a 30-minute TTL and `/preview/content/` scope.
 - Cookies are `HttpOnly` and `SameSite=Lax`; production HTTPS callers enable `Secure`.
 - Invalid, tampered, malformed, or expired cookies are treated as absent.
-- No outgoing webhook contract is claimed: the current Ooops CMS API exposes preview reads, not publish webhooks.
+- Rebuild signatures use Web Crypto HMAC-SHA256 and reject stale timestamps, invalid event ids, and replayed durable claims.
+- Deploy Hook URLs are validated as Cloudflare Workers Builds endpoints and must remain Cloudflare secrets.
 - License: MIT.
