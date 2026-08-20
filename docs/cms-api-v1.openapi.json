@@ -92,6 +92,14 @@
           },
           "contentTypeApiId": {
             "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "additionalProperties": false
