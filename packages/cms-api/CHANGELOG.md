@@ -1,5 +1,13 @@
 # @ooopsstudio/cms-api
 
+## 0.3.0
+
+### Minor Changes
+
+- [`5b019c4`](https://github.com/ooops-studio/ooops-cms-packages/commit/5b019c41730b86a4a1182e2cd44db40a0e1c2f9a) Thanks [@italiour](https://github.com/italiour)! - Add the field-scoped, server-only `createCmsDraftWriter()` client with token introspection, optimistic draft reads and typed atomic patch operations for existing single and collection entries.
+
+  Breaking for direct `OoopsCmsClient` consumers: the generic public `request()` escape hatch is now internal. Use the typed read client methods or the separate draft writer.
+
 ## 0.2.0
 
 ### Minor Changes
