@@ -22,7 +22,29 @@ const posts = await cms.content.listCollectionEntries('posts', { limit: 20 });
 const media = await cms.media.list({ kind: 'images' });
 ```
 
-Use API tokens only in server-side integrations. The authenticated client mirrors the CMS v1 read-only OpenAPI contract.
+Use API tokens only in server-side integrations. The authenticated read client mirrors the CMS v1 read contract and intentionally exposes no generic arbitrary-method transport.
+
+## Draft writer
+
+Draft editor tokens are field-scoped and server-side only. Create them in CMS Settings → Integrations, store them in a protected server or edge environment variable, and use the separate writer factory:
+
+```ts
+import { createCmsDraftWriter } from '@ooopsstudio/cms-api';
+
+const writer = createCmsDraftWriter({
+  baseUrl: 'https://cms.example.com/api/cms/v1',
+  token: process.env.OOOPS_CMS_DRAFT_TOKEN!
+});
+
+const current = await writer.drafts.getSingle('homepage');
+const updated = await writer.drafts.patchSingle(
+  'homepage',
+  [{ op: 'field.set', field: 'headline', locale: 'en', value: 'New headline' }],
+  current.revision
+);
+```
+
+Every patch requires the latest revision and is atomic. The writer can update existing drafts only; it cannot create, publish, archive, or delete entries. Repeatable groups use stable row IDs through `repeatable.add`, `repeatable.patch`, `repeatable.remove`, and `repeatable.move` operations.
 
 ## Public forms and previews
 

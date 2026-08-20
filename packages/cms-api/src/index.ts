@@ -58,6 +58,99 @@ export type CmsPreviewClientOptions = {
 	timeoutMs?: number;
 }
 
+export type CmsDraftWriterOptions = OoopsCmsClientOptions
+
+export type CmsApiTokenPreset = 'website_read' | 'draft_editor'
+
+export type CmsApiGrantFieldSummary = {
+	apiId: string;
+	displayName: string;
+	kind: string;
+	isLocalized: boolean;
+}
+
+export type CmsApiGrantSummary = {
+	apiId: string;
+	displayName: string;
+	kind: 'single' | 'collection';
+	fields: CmsApiGrantFieldSummary[];
+}
+
+export type CmsTokenInspectionResponse = {
+	ok: true;
+	token: {
+		organization: {id: string; slug: string; name: string};
+		preset: CmsApiTokenPreset;
+		expiresAt: string;
+		scopes: string[];
+		grants: CmsApiGrantSummary[];
+	};
+}
+
+export type CmsDraftFieldSetOperation = {
+	op: 'field.set';
+	field: string;
+	locale?: string;
+	value: unknown;
+}
+
+export type CmsDraftFieldPatchOperation = {
+	op: 'field.patch';
+	field: string;
+	locale?: string;
+	action: 'add' | 'replace' | 'remove';
+	path: string;
+	value?: unknown;
+}
+
+export type CmsDraftRepeatableAddOperation = {
+	op: 'repeatable.add';
+	field: string;
+	afterId?: string | null;
+	value?: {values?: Record<string, unknown>; localized?: Record<string, Record<string, unknown>>};
+}
+
+export type CmsDraftRepeatablePatchOperation = {
+	op: 'repeatable.patch';
+	field: string;
+	rowId: string;
+	child: string;
+	locale?: string;
+	value: unknown;
+}
+
+export type CmsDraftRepeatableRemoveOperation = {
+	op: 'repeatable.remove';
+	field: string;
+	rowId: string;
+}
+
+export type CmsDraftRepeatableMoveOperation = {
+	op: 'repeatable.move';
+	field: string;
+	rowId: string;
+	afterId?: string | null;
+}
+
+export type CmsDraftOperation =
+	| CmsDraftFieldSetOperation
+	| CmsDraftFieldPatchOperation
+	| CmsDraftRepeatableAddOperation
+	| CmsDraftRepeatablePatchOperation
+	| CmsDraftRepeatableRemoveOperation
+	| CmsDraftRepeatableMoveOperation
+
+export type CmsDraftResponse<TValues extends CmsRecord = CmsRecord> = {
+	ok: true;
+	entryId: string;
+	apiId: string;
+	kind: 'single' | 'collection';
+	status: string;
+	values: TValues;
+	revision: string;
+	etag: string;
+}
+
 export type CmsApiErrorBody = {
 	ok: false;
 	error: string;
@@ -130,7 +223,7 @@ const composeSignals = (signals: AbortSignal[]) => {
 const queryOptions = (query?: CmsApiRequestOptions['query']): CmsApiRequestOptions =>
 	query ? {query} : {}
 
-export class OoopsCmsClient {
+class CmsApiTransport {
 	readonly baseUrl: string
 	private readonly token: string
 	private readonly fetchImpl: CmsApiFetch
@@ -147,7 +240,11 @@ export class OoopsCmsClient {
 		}
 	}
 
-	async request<T>(method: string, path: string, options: CmsApiRequestOptions = {}): Promise<T> {
+	async requestWithResponse<T>(
+		method: string,
+		path: string,
+		options: CmsApiRequestOptions = {}
+	): Promise<{data: T; response: Response}> {
 		const url = new URL(`${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`)
 		appendQuery(url, options.query)
 		const timeoutMs = options.timeoutMs ?? this.timeoutMs
@@ -191,7 +288,7 @@ export class OoopsCmsClient {
 					parsed
 				)
 			}
-			return parsed as T
+			return {data: parsed as T, response}
 		} catch(error) {
 			if (timeoutController?.signal.aborted && !(error instanceof OoopsCmsApiError)) {
 				throw new OoopsCmsApiError(408, 'request_timeout', 'CMS API request timed out.', null)
@@ -202,60 +299,154 @@ export class OoopsCmsClient {
 		}
 	}
 
+	async request<T>(method: string, path: string, options: CmsApiRequestOptions = {}): Promise<T> {
+		return (await this.requestWithResponse<T>(method, path, options)).data
+	}
+}
+
+export class OoopsCmsClient {
+	readonly baseUrl: string
+	private readonly transport: CmsApiTransport
+
+	constructor(options: OoopsCmsClientOptions) {
+		this.transport = new CmsApiTransport(options)
+		this.baseUrl = this.transport.baseUrl
+	}
+
 	schema = {
-		list: <T = unknown>() => this.request<T>('GET', '/schema')
+		list: <T = unknown>() => this.transport.request<T>('GET', '/schema')
 	}
 
 	content = {
-		listCollections: <T = unknown>() => this.request<T>('GET', '/content/collections'),
+		listCollections: <T = unknown>() => this.transport.request<T>('GET', '/content/collections'),
 		listCollectionEntries: <T = unknown>(apiId: string, query?: CmsApiRequestOptions['query']) =>
-			this.request<T>(
+			this.transport.request<T>(
 				'GET',
 				`/content/collections/${encodeURIComponent(apiId)}/entries`,
 				queryOptions(query)
 			),
 		getCollectionEntry: <T = unknown>(apiId: string, idOrSlug: string) =>
-			this.request<T>(
+			this.transport.request<T>(
 				'GET',
 				`/content/collections/${encodeURIComponent(apiId)}/entries/${encodeURIComponent(idOrSlug)}`
 			),
-		listSingles: <T = unknown>() => this.request<T>('GET', '/content/singles'),
-		getSingle: <T = unknown>(apiId: string) => this.request<T>('GET', `/content/singles/${encodeURIComponent(apiId)}`)
+		listSingles: <T = unknown>() => this.transport.request<T>('GET', '/content/singles'),
+		getSingle: <T = unknown>(apiId: string) => this.transport.request<T>('GET', `/content/singles/${encodeURIComponent(apiId)}`)
 	}
 
 	media = {
 		list: <T = unknown>(query?: CmsApiRequestOptions['query']) =>
-			this.request<T>('GET', '/media', queryOptions(query)),
-		get: <T = unknown>(id: string) => this.request<T>('GET', `/media/${encodeURIComponent(id)}`)
+			this.transport.request<T>('GET', '/media', queryOptions(query)),
+		get: <T = unknown>(id: string) => this.transport.request<T>('GET', `/media/${encodeURIComponent(id)}`)
 	}
 
 	forms = {
-		list: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.request<T>('GET', '/forms', queryOptions(query)),
-		get: <T = unknown>(formId: string) => this.request<T>('GET', `/forms/${encodeURIComponent(formId)}`),
+		list: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.transport.request<T>('GET', '/forms', queryOptions(query)),
+		get: <T = unknown>(formId: string) => this.transport.request<T>('GET', `/forms/${encodeURIComponent(formId)}`),
 		listSubmissions: <T = unknown>(formId: string, query?: CmsApiRequestOptions['query']) =>
-			this.request<T>('GET', `/forms/${encodeURIComponent(formId)}/submissions`, queryOptions(query)),
+			this.transport.request<T>('GET', `/forms/${encodeURIComponent(formId)}/submissions`, queryOptions(query)),
 		getSubmission: <T = unknown>(formId: string, submissionId: string) =>
-			this.request<T>('GET', `/forms/${encodeURIComponent(formId)}/submissions/${encodeURIComponent(submissionId)}`)
+			this.transport.request<T>('GET', `/forms/${encodeURIComponent(formId)}/submissions/${encodeURIComponent(submissionId)}`)
 	}
 
 	analytics = {
-		dashboard: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.request<T>('GET', '/analytics/dashboard', queryOptions(query)),
+		dashboard: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.transport.request<T>('GET', '/analytics/dashboard', queryOptions(query)),
 		/** Fetch from the consumer server; never expose the CMS API token to browsers. */
-		runtime: <T = unknown>() => this.request<T>('GET', '/analytics/runtime'),
-		overview: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.request<T>('GET', '/analytics/overview', queryOptions(query)),
-		series: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.request<T>('GET', '/analytics/series', queryOptions(query)),
-		realtime: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.request<T>('GET', '/analytics/realtime', queryOptions(query)),
+		runtime: <T = unknown>() => this.transport.request<T>('GET', '/analytics/runtime'),
+		overview: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.transport.request<T>('GET', '/analytics/overview', queryOptions(query)),
+		series: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.transport.request<T>('GET', '/analytics/series', queryOptions(query)),
+		realtime: <T = unknown>(query?: CmsApiRequestOptions['query']) => this.transport.request<T>('GET', '/analytics/realtime', queryOptions(query)),
 		breakdown: <T = unknown>(dimension: string, query?: CmsApiRequestOptions['query']) =>
-			this.request<T>('GET', `/analytics/breakdown/${encodeURIComponent(dimension)}`, queryOptions(query))
+			this.transport.request<T>('GET', `/analytics/breakdown/${encodeURIComponent(dimension)}`, queryOptions(query))
 	}
 
 	seo = {
-		get: <T = unknown>() => this.request<T>('GET', '/seo')
+		get: <T = unknown>() => this.transport.request<T>('GET', '/seo')
 	}
 }
 
 export const createCmsClient = (options: OoopsCmsClientOptions) =>
 	new OoopsCmsClient(options)
+
+const unquoteEtag = (value: string | null) => {
+	if (!value) return null
+	const trimmed = value.trim()
+	return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed
+}
+
+const quoteRevision = (revision: string) => {
+	const unquoted = unquoteEtag(revision) ?? revision
+	return `"${unquoted}"`
+}
+
+export class OoopsCmsDraftWriter {
+	readonly baseUrl: string
+	private readonly transport: CmsApiTransport
+
+	constructor(options: CmsDraftWriterOptions) {
+		if (typeof window !== 'undefined') {
+			throw new Error('CMS draft writer tokens are server-side only.')
+		}
+		this.transport = new CmsApiTransport(options)
+		this.baseUrl = this.transport.baseUrl
+	}
+
+	token = {
+		inspect: () => this.transport.request<CmsTokenInspectionResponse>('GET', '/token')
+	}
+
+	private async draftRequest<TValues extends CmsRecord>(
+		method: 'GET' | 'PATCH',
+		path: string,
+		operations?: readonly CmsDraftOperation[],
+		revision?: string
+	): Promise<CmsDraftResponse<TValues>> {
+		const {data, response} = await this.transport.requestWithResponse<Omit<CmsDraftResponse<TValues>, 'etag'>>(
+			method,
+			path,
+			{
+				...(operations ? {body: {operations}} : {}),
+				...(revision ? {headers: {'if-match': quoteRevision(revision)}} : {})
+			}
+		)
+		const etag = unquoteEtag(response.headers.get('etag')) ?? data.revision
+		return {...data, revision: etag, etag}
+	}
+
+	drafts = {
+		getSingle: <TValues extends CmsRecord = CmsRecord>(apiId: string) =>
+			this.draftRequest<TValues>('GET', `/content/singles/${encodeURIComponent(apiId)}/draft`),
+		patchSingle: <TValues extends CmsRecord = CmsRecord>(
+			apiId: string,
+			operations: readonly CmsDraftOperation[],
+			revision: string
+		) => this.draftRequest<TValues>(
+			'PATCH',
+			`/content/singles/${encodeURIComponent(apiId)}/draft`,
+			operations,
+			revision
+		),
+		getCollectionEntry: <TValues extends CmsRecord = CmsRecord>(apiId: string, entryId: string) =>
+			this.draftRequest<TValues>(
+				'GET',
+				`/content/collections/${encodeURIComponent(apiId)}/entries/${encodeURIComponent(entryId)}/draft`
+			),
+		patchCollectionEntry: <TValues extends CmsRecord = CmsRecord>(
+			apiId: string,
+			entryId: string,
+			operations: readonly CmsDraftOperation[],
+			revision: string
+		) => this.draftRequest<TValues>(
+			'PATCH',
+			`/content/collections/${encodeURIComponent(apiId)}/entries/${encodeURIComponent(entryId)}/draft`,
+			operations,
+			revision
+		)
+	}
+}
+
+export const createCmsDraftWriter = (options: CmsDraftWriterOptions) =>
+	new OoopsCmsDraftWriter(options)
 
 type PublicRequestOptions = {
 	baseUrl: string;

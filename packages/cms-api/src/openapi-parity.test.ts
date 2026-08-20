@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import {describe, expect, it} from 'vitest'
 
-import {OoopsCmsClient} from './index'
+import {createCmsDraftWriter, OoopsCmsClient} from './index'
 
 const openApiPath = path.resolve(process.cwd(), '../../docs/cms-api-v1.openapi.json')
 const openApi = JSON.parse(readFileSync(openApiPath, 'utf8')) as {
@@ -40,5 +40,25 @@ describe('OoopsCmsClient OpenAPI parity', () => {
 		expect(client).not.toHaveProperty('webhooks')
 		expect(client.media).not.toHaveProperty('upload')
 		expect(client.content).not.toHaveProperty('updateSingle')
+	})
+
+	it('tracks the field-scoped draft writer contract separately from read clients', () => {
+		expect(openApi.paths).toHaveProperty('/token')
+		expect(openApi.paths).toHaveProperty('/content/singles/{apiId}/draft')
+		expect(openApi.paths).toHaveProperty('/content/collections/{apiId}/entries/{entryId}/draft')
+		expect(openApi.paths['/content/singles/{apiId}/draft']).toHaveProperty('patch')
+
+		const writer = createCmsDraftWriter({
+			baseUrl: 'https://cms.example.com/api/cms/v1',
+			token: 'writer-token',
+			fetch: (async() => new Response('{}')) as typeof fetch
+		})
+		expect(typeof writer.token.inspect).toBe('function')
+		expect(typeof writer.drafts.patchSingle).toBe('function')
+		expect(typeof writer.drafts.patchCollectionEntry).toBe('function')
+
+		const reader = new OoopsCmsClient({baseUrl: 'https://cms.example.com/api/cms/v1', token: 'reader'})
+		expect(reader).not.toHaveProperty('drafts')
+		expect(reader).not.toHaveProperty('request')
 	})
 })
