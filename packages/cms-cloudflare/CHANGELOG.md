@@ -1,5 +1,12 @@
 # @ooopsstudio/cms-cloudflare
 
+## 0.3.2
+
+### Patch Changes
+
+- Align the Astro and Cloudflare helpers with `@ooopsstudio/cms-api` 0.3 so
+  consumer applications resolve one compatible client and type surface.
+
 ## 0.3.1
 
 ### Patch Changes

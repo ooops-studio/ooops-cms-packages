@@ -1,6 +1,6 @@
 {
   "name": "@ooopsstudio/cms-astro",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Astro-friendly helpers for Ooops CMS consumer sites.",
   "type": "module",
   "private": false,
@@ -30,7 +30,7 @@
     "depcruise": "depcruise --config ../../.dependency-cruiser.cjs src"
   },
   "dependencies": {
-    "@ooopsstudio/cms-api": "^0.2.0"
+    "@ooopsstudio/cms-api": "^0.3.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
