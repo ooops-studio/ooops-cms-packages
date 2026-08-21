@@ -1,5 +1,11 @@
 # @ooopsstudio/cms-api
 
+## 0.3.1
+
+### Patch Changes
+
+- Invoke authenticated and public fetch implementations with the platform global receiver so the client works in Cloudflare Workers runtimes.
+
 ## 0.3.0
 
 ### Minor Changes

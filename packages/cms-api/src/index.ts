@@ -223,6 +223,12 @@ const composeSignals = (signals: AbortSignal[]) => {
 const queryOptions = (query?: CmsApiRequestOptions['query']): CmsApiRequestOptions =>
 	query ? {query} : {}
 
+const invokeFetch = (
+	fetchImpl: CmsApiFetch,
+	input: Parameters<CmsApiFetch>[0],
+	init?: Parameters<CmsApiFetch>[1]
+) => Reflect.apply(fetchImpl, globalThis, [input, init]) as ReturnType<CmsApiFetch>
+
 class CmsApiTransport {
 	readonly baseUrl: string
 	private readonly token: string
@@ -277,7 +283,7 @@ class CmsApiTransport {
 				requestInit.signal = signal
 			}
 
-			const response = await this.fetchImpl(url, requestInit)
+			const response = await invokeFetch(this.fetchImpl, url, requestInit)
 			const parsed = await parseJsonResponse(response)
 			if (!response.ok) {
 				const body = parsed as Partial<CmsApiErrorBody> | null
@@ -464,7 +470,7 @@ const publicRequest = async<T>(
 	const controller = options.timeoutMs ? new AbortController() : null
 	const timeout = controller ? setTimeout(() => controller.abort(), options.timeoutMs) : null
 	try {
-		const response = await (options.fetch ?? fetch)(url, {
+		const response = await invokeFetch(options.fetch ?? fetch, url, {
 			method: request.body === undefined ? 'GET' : 'POST',
 			headers: {
 				accept: 'application/json',

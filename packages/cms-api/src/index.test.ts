@@ -37,6 +37,21 @@ describe('OoopsCmsClient', () => {
 		expect(init.headers).toMatchObject({authorization: 'Bearer token_123', accept: 'application/json'})
 	})
 
+	it('invokes fetch with the platform global receiver', async() => {
+		const receiverAwareFetch = vi.fn(function(this: typeof globalThis) {
+			expect(this).toBe(globalThis)
+			return Promise.resolve(new Response(JSON.stringify({ok: true}), {status: 200}))
+		}) as unknown as typeof fetch
+		const client = new OoopsCmsClient({
+			baseUrl: 'https://cms.example.com/api/cms/v1',
+			token: 'token_123',
+			fetch: receiverAwareFetch
+		})
+
+		await client.seo.get()
+		expect(receiverAwareFetch).toHaveBeenCalledOnce()
+	})
+
 	it('throws typed API errors', async() => {
 		const fetchMock = vi.fn(async() =>
 			new Response(JSON.stringify({ok: false, error: 'scope_denied', code: 'scope_denied', message: 'Nope.'}), {status: 403})
@@ -168,6 +183,20 @@ describe('OoopsCmsDraftWriter', () => {
 })
 
 describe('public consumer clients', () => {
+	it('invokes public fetch with the platform global receiver', async() => {
+		const receiverAwareFetch = vi.fn(function(this: typeof globalThis) {
+			expect(this).toBe(globalThis)
+			return Promise.resolve(new Response(JSON.stringify({ok: true}), {status: 201}))
+		}) as unknown as typeof fetch
+		const client = createCmsPublicFormsClient({
+			baseUrl: 'https://cms.example.com/api/cms/v1',
+			fetch: receiverAwareFetch
+		})
+
+		await client.forms.submit('share-token', {answers: {email: 'hello@example.com'}})
+		expect(receiverAwareFetch).toHaveBeenCalledOnce()
+	})
+
 	it('submits public forms without an authorization header', async() => {
 		const fetchMock = vi.fn(async() => new Response(JSON.stringify({ok: true}), {status: 201}))
 		const client = createCmsPublicFormsClient({
